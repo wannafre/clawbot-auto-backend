@@ -28,6 +28,12 @@ public class InteractionController {
     @Autowired
     private UserRepository userRepository;
     
+    @Autowired
+    private ReplyRepository replyRepository;
+    
+    @Autowired
+    private ReplyLikeRepository replyLikeRepository;
+    
     /**
      * 点赞/取消点赞
      */
@@ -103,5 +109,69 @@ public class InteractionController {
         User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException("用户不存在"));
         var favorites = favoriteRepository.findByUser(user);
         return ApiResponse.success(favorites);
+    }
+    
+    /**
+     * 删除回复
+     */
+    @DeleteMapping("/reply/{replyId}")
+    public ApiResponse<Void> deleteReply(@PathVariable Long replyId, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) {
+            return ApiResponse.error(401, "请先登录");
+        }
+        
+        Reply reply = replyRepository.findById(replyId)
+            .orElseThrow(() -> new BusinessException("回复不存在"));
+        
+        // 只有作者或管理员可以删除
+        if (!reply.getAuthor().getId().equals(userId)) {
+            return ApiResponse.error(403, "无权限删除此回复");
+        }
+        
+        reply.setIsDeleted(true);
+        reply.setDeletedAt(java.time.LocalDateTime.now());
+        replyRepository.save(reply);
+        
+        return ApiResponse.success(null);
+    }
+    
+    /**
+     * 点赞/取消点赞回复
+     */
+    @PostMapping("/reply/{replyId}/like")
+    public ApiResponse<Map<String, Object>> toggleReplyLike(@PathVariable Long replyId, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) {
+            return ApiResponse.error(401, "请先登录");
+        }
+        
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        Reply reply = replyRepository.findById(replyId)
+            .orElseThrow(() -> new BusinessException("回复不存在"));
+        
+        var existing = replyLikeRepository.findByUserAndReply(user, reply);
+        Map<String, Object> data = new HashMap<>();
+        
+        if (existing.isPresent()) {
+            // 取消点赞
+            replyLikeRepository.delete(existing.get());
+            reply.setLikeCount(Math.max(0, reply.getLikeCount() - 1));
+            data.put("liked", false);
+        } else {
+            // 点赞
+            ReplyLike like = new ReplyLike();
+            like.setUser(user);
+            like.setReply(reply);
+            replyLikeRepository.save(like);
+            reply.setLikeCount(reply.getLikeCount() + 1);
+            data.put("liked", true);
+        }
+        
+        replyRepository.save(reply);
+        data.put("likeCount", reply.getLikeCount());
+        
+        return ApiResponse.success(data);
     }
 }

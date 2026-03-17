@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/forums/**").permitAll()
                 .requestMatchers("/api/checkin/**").permitAll()
                 .requestMatchers("/api/captcha/**").permitAll()
+                .requestMatchers("/api/search/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

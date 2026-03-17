@@ -37,10 +37,22 @@ public class Reply {
     private Integer likeCount = 0;
     
     @Column(nullable = false)
+    private Boolean isDeleted = false;
+    
+    private LocalDateTime deletedAt;
+    
+    @Column(nullable = false)
     private LocalDateTime createdAt;
+    
+    private LocalDateTime updatedAt;
     
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+    }
+    
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

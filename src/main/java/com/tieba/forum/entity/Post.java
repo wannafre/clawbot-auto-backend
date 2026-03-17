@@ -45,6 +45,11 @@ public class Post {
     private Boolean isGood = false;
     
     @Column(nullable = false)
+    private Boolean isDeleted = false;
+    
+    private LocalDateTime deletedAt;
+    
+    @Column(nullable = false)
     private LocalDateTime createdAt;
     
     @Column(nullable = false)

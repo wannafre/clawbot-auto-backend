@@ -32,16 +32,25 @@ public class PostController {
     private ReplyRepository replyRepository;
     
     @GetMapping
-    public ApiResponse<Page<Post>> list(
+    public ApiResponse<Page<PostSummaryDto>> list(
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ApiResponse.success(postRepository.findByOrderByCreatedAtDesc(pageable));
+        return ApiResponse.success(postRepository.findPostSummaries(pageable));
+    }
+    
+    @GetMapping("/summary")
+    public ApiResponse<Page<PostSummaryDto>> listSummary(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ApiResponse.success(postRepository.findPostSummaries(pageable));
     }
     
     @GetMapping("/forum/{forumId}")
-    public ApiResponse<Page<Post>> byForum(
+    public ApiResponse<Page<PostSummaryDto>> byForum(
         @PathVariable Long forumId,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size
@@ -49,7 +58,7 @@ public class PostController {
         Forum forum = forumRepository.findById(forumId)
             .orElseThrow(() -> new RuntimeException("板块不存在"));
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ApiResponse.success(postRepository.findByForum(forum, pageable));
+        return ApiResponse.success(postRepository.findPostSummariesByForum(forum, pageable));
     }
     
     @GetMapping("/{id}")
@@ -99,6 +108,84 @@ public class PostController {
         Post post = postRepository.findById(id)
             .orElseThrow(() -> new BusinessException("帖子不存在"));
         return ApiResponse.success(replyRepository.findByPostOrderByFloorAsc(post));
+    }
+    
+    // 编辑帖子
+    @PutMapping("/{id}")
+    public ApiResponse<Post> update(@PathVariable Long id, @RequestBody PostRequest req, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) {
+            return ApiResponse.error(401, "请先登录");
+        }
+        
+        Post post = postRepository.findById(id)
+            .orElseThrow(() -> new BusinessException("帖子不存在"));
+        
+        // 只有作者可以编辑
+        if (!post.getAuthor().getId().equals(userId)) {
+            return ApiResponse.error(403, "无权限编辑此帖子");
+        }
+        
+        post.setTitle(req.getTitle());
+        post.setContent(req.getContent());
+        postRepository.save(post);
+        
+        return ApiResponse.success(post);
+    }
+    
+    // 删除帖子（软删除）
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) {
+            return ApiResponse.error(401, "请先登录");
+        }
+        
+        Post post = postRepository.findById(id)
+            .orElseThrow(() -> new BusinessException("帖子不存在"));
+        
+        // 只有作者或管理员可以删除
+        if (!post.getAuthor().getId().equals(userId)) {
+            return ApiResponse.error(403, "无权限删除此帖子");
+        }
+        
+        post.setIsDeleted(true);
+        post.setDeletedAt(java.time.LocalDateTime.now());
+        postRepository.save(post);
+        
+        return ApiResponse.success(null);
+    }
+    
+    // 搜索帖子
+    @GetMapping("/search")
+    public ApiResponse<Page<Post>> search(
+        @RequestParam String keyword,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ApiResponse.success(postRepository.searchPosts(keyword, pageable));
+    }
+    
+    // 热门帖子
+    @GetMapping("/hot")
+    public ApiResponse<Page<Post>> hot(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "viewCount"));
+        return ApiResponse.success(postRepository.findByIsDeletedFalseOrderByViewCountDesc(pageable));
+    }
+    
+    // 用户的帖子
+    @GetMapping("/user/{userId}")
+    public ApiResponse<Page<Post>> byUser(
+        @PathVariable Long userId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ApiResponse.success(postRepository.findByAuthorIdAndIsDeletedFalse(userId, pageable));
     }
     
     @PostMapping("/{id}/replies")
